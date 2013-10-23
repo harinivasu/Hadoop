@@ -1,0 +1,291 @@
+HBase is an open source, non-relational, distributed database providing BigTable like capabilities for Hadoop. Tables in HBase can be accessed using the Java-API for HBase but unfortunately a developer would require to put in a lot of efforts to do so. That is because the API provides a very restricted set of functions. For those new to API , it takes a lot of time to understand the available classes and use them to get the required job done. 
+
+So to enable easy handling of HBase tables, I have developed a wrapper library over the existing API which provides basic methods to create, read , delete records in hbase table and also another set of functions such as distinct, having, between, intersection, union which work for HBase just as we have these working in SQL. A big fraction of our work on tables depends on these functions and their availability makes using the HBase API easy.
+ 
+This post includes a sample program to illustrate the usage of read and write functions only which specifically includes the following operations :
+ 
+Adding entry to a single column
+ Adding records with a single column family and multiple columns
+ Adding a row with any number of column families and columns
+ Obtaining a single column entry
+ Obtaining the entire row
+ Reading all entries of a particular column of a table
+ Reading all records of an HBase Table 
+Deleting a record from an HBase Table
+ 
+I have used hbase-0.20.6 and hadoop-0.20.1 and you could deploy this program on your eclipse and make test classes to check it.
+
+ Program :
+ 
+import java.io.IOException;
+ import java.util.ArrayList;
+ import java.util.Arrays;
+ import java.util.HashMap;
+ import java.util.HashSet;
+ import java.util.Iterator;
+ import java.util.Set;
+ import org.apache.hadoop.fs.Path;
+ import org.apache.hadoop.hbase.HBaseConfiguration;
+ import org.apache.hadoop.hbase.client.Delete;
+ import org.apache.hadoop.hbase.client.Get;
+ import org.apache.hadoop.hbase.client.HTable;
+ import org.apache.hadoop.hbase.client.Put;
+ import org.apache.hadoop.hbase.client.Result;
+ import org.apache.hadoop.hbase.client.ResultScanner;
+ import org.apache.hadoop.hbase.client.Scan;
+ import org.apache.hadoop.hbase.filter.Filter;
+ import org.apache.hadoop.hbase.filter.FilterList;
+ import org.apache.hadoop.hbase.filter.SingleColumnValueFilter;
+ import org.apache.hadoop.hbase.filter.CompareFilter.CompareOp;
+ import org.apache.hadoop.hbase.filter.FilterList.Operator;
+ import org.apache.hadoop.hbase.util.Bytes;
+ 
+public class HBaseTest
+ {
+ private static HBaseConfiguration conf;
+ HBaseTest()
+     {
+         conf = new HBaseConfiguration();
+         conf.addResource(new Path("/path_to_your_hbase/hbase-0.20.6/conf/hbase-site.xml"));
+     }
+ 
+// assigns a value to a particular column of a record
+ 
+public void addAColumnEntry(String tableName, String colFamilyName, String colName, String data)
+     {
+         try
+         {
+             HTable table = new HTable(conf, tableName);
+             String row = "row" + Math.random();
+             byte[] rowKey = Bytes.toBytes(row);
+             Put putdata = new Put(rowKey);
+             putdata.add(Bytes.toBytes(colFamilyName), Bytes.toBytes(colName),Bytes.toBytes(data));
+             table.put(putdata);
+         } catch (IOException e)
+         {
+             System.out.println("Exception occured in adding data");
+         }
+     }
+ 
+// write a record to a table having just one column family or write only a portion of a record
+ 
+public void addRecordWithSingleColumnFamily(String tableName, String colFamilyName, String [] colName,String [] data)
+     {
+         try
+         {
+             HTable table = new HTable(conf, tableName);
+             String row = "row" + Math.random();
+             byte[] rowKey = Bytes.toBytes(row);
+             Put putdata = new Put(rowKey);
+             if(colName.length == data.length)
+             {
+             for(int i=0 ; i < colName.length ; i++)
+             putdata.add(Bytes.toBytes(colFamilyName), Bytes.toBytes(colName[i]),
+                     Bytes.toBytes(data[i]));
+             }
+             table.put(putdata);
+       
+        } catch (IOException e)
+         {
+             System.out.println("Exception occured in adding data");
+         }
+     }
+ 
+// add a record with any number of column families
+ 
+public void addRecord(String tableName, String [] colFamilyName, String [][]  colName,String [][] data)
+     {
+         try
+         {
+             HTable table = new HTable(conf, tableName);
+             String row = "row" + Math.random();
+             byte[] rowKey = Bytes.toBytes(row);
+             Put putdata = new Put(rowKey);
+             for(int j=0 ; j < colFamilyName.length ; j++)
+             {
+             if(colName[j].length == data[j].length)
+             {
+             for(int i=0 ; i < colName[j].length ; i++)
+             putdata.add(Bytes.toBytes(colFamilyName[j]), Bytes.toBytes(colName[j][i]),
+                     Bytes.toBytes(data[j][i]));
+             }
+             }
+             table.put(putdata);
+       
+        } catch (IOException e)
+         {
+             System.out.println("Exception occured in adding data");
+         }
+     }
+ 
+// returns entry of a particular column of a record
+ 
+public String getColEntry(String tableName, String rowName,String colFamilyName, String colName)
+     {
+         String result = null;
+         try
+         {
+             HTable table = new HTable(conf, tableName);
+             byte[] rowKey = Bytes.toBytes(rowName);
+             Get getRowData = new Get(rowKey);
+             Result res = table.get(getRowData);
+             byte[] obtainedRow = res.getValue(Bytes.toBytes(colFamilyName),
+                     Bytes.toBytes(colName));
+             result = Bytes.toString(obtainedRow);
+         } catch (IOException e)
+         {
+             System.out.println("Exception occured in retrieving data");
+         }
+         return result;
+     }
+   
+// returns a row  in the form of a string.
+   
+public String getRow(String tableName, String rowName,String colFamilyName, String [] colName)
+     {
+             String result = colName[0];
+         try
+         {
+             HTable table = new HTable(conf, tableName);
+             byte[] rowKey = Bytes.toBytes(rowName);
+             Get getRowData = new Get(rowKey);
+             Result res = table.get(getRowData);
+             for(int j=0 ; j < colName.length ; j++)
+             {
+             byte[] obtainedRow = res.getValue(Bytes.toBytes(colFamilyName),Bytes.toBytes(colName[j]));
+             System.out.println(colName[j]);
+             String s = Bytes.toString(obtainedRow);
+             if(j==0)
+                 result = colName[j] + "=" + s ;
+             else
+                 result = result + "&" + colName[j] + "=" + s;
+             System.out.println(s);
+             }
+           
+        } catch (IOException e)
+         {
+             System.out.println("Exception occured in retrieving data");
+         }
+         return result;
+     }
+   
+// returns an arraylist of all entries of a column.
+   
+public ArrayList<String> getCol(String tableName,String colFamilyName, String colName)
+     {
+         ArrayList<String> al = new ArrayList<String>();
+         ResultScanner rs=null;
+         Result res = null;
+       
+        try {
+             HTable table = new HTable(conf, tableName);
+           
+            Scan scan = new Scan();
+             scan.addColumn(Bytes.toBytes(colFamilyName),Bytes.toBytes(colName));
+             rs = table.getScanner(scan);
+             while((res=rs.next()) != null)
+             {
+                 String colEntry = null;
+                 byte [] obtCol = res.getValue(Bytes.toBytes(colFamilyName+":"+colName));              
+                colEntry = Bytes.toString(obtCol);
+                 al.add(colEntry);
+             }
+           
+        } catch (IOException e)
+         {
+             System.out.println("Exception occured in retrieving data");
+         }
+         finally
+         {
+             rs.close();
+         }
+         return al;
+ 
+    }
+   
+// returns a list of hashmaps, each hashmap containing entries of a single record.
+ 
+public  ArrayList<HashMap<String, String>> getTable(String tableName,String [] colFamilyName, String [][] colName)
+     {
+     ResultScanner rs=null;
+     ArrayList<HashMap<String, String>> al = new ArrayList<HashMap<String, String>>();
+     Result res = null;
+     try
+     {
+         HTable table = new HTable(conf, tableName);
+         Scan scan = new Scan();
+         rs = table.getScanner(scan);
+         while((res=rs.next()) != null)
+         {
+             HashMap<String, String> map = new HashMap<String,String>();
+             String s = null;
+             for(int i=0 ; i<colFamilyName.length ; i++)
+             {
+                 for(int j=0 ; j < colName[i].length ; j++)
+                     {
+                         byte[] obtainedRow = res.getValue(Bytes.toBytes(colFamilyName[i]),Bytes.toBytes(colName[i][j]));
+                         s = Bytes.toString(obtainedRow);
+                         System.out.println(s);
+                         map.put(colName[i][j],s);
+                     }      
+            }          
+            al.add(map);
+         }
+     } catch (IOException e)
+         {
+             System.out.println("Exception occured in retrieving data");
+         }
+     finally
+     {
+         rs.close();
+     }
+         return al;
+     }
+ 
+// function to delete a row from the table.
+ 
+public String deleteTableRow(String tableName, String rowName) 
+   {
+    String result = null;
+    try 
+   {
+     HTable table = new HTable(conf, tableName);
+     byte[] rowKey = Bytes.toBytes(rowName);
+     Delete delRowData = new Delete(rowKey);
+     table.delete(delRowData);
+    } catch (IOException e) 
+    {
+         System.out.println("Exception occured in retrieving data");
+     }
+   return result;
+ 
+  }
+ 
+public static void main(String args[])
+     {
+         HBaseTest test  = new HBaseTest();
+         String tableName = "testing_table" ;
+         String [] colFamilyNames = {"colFamily1","colFamily2"};
+         String [][] colNames  = {{"Id","Name"},{"Addr","Designation"}};
+           
+        test.addAColumnEntry(tableName,"colFamily1","Name","Ram");
+         test.addRecordWithSingleColumnFamily(tableName,"colFamily1",{"Id","Name"},{"117","Ram"});
+         test.addRecord(tableName,colFamilyNames,colNames,{{"117","Ram"},{"ABC","Manager"}});
+ 
+        // specify the rowKey as per your table
+ 
+        test.getColEntry(tableName,rowKey,"colFamily1","Name");
+         String yourRow = test.getRow(tableName,"row0.35234564623454","colFamily1",{"Id","Name"});
+ 
+        ArrayList<String> al = new ArrayList<String>();
+         al = test.getCol(tableName,"colFamily1","Name");
+ 
+        ArrayList<HashMap<String, String>> listofmaps = new ArrayList<HashMap<String, String>>();
+         listofmaps = test.getTable(tableName,colFamilyNames,colNames);
+ 
+    // specify the rowKey as per your table 
+
+    test.deleteTableRow(tableName, rowKey);
+     }
+ }
+ 
